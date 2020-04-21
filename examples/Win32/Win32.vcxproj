@@ -155,7 +155,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="..\..\..\AsyncTask.h" />
+    <ClInclude Include="..\..\AsyncTask.h" />
     <ClInclude Include="Calculation.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="Resource.h" />

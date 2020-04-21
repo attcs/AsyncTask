@@ -27,10 +27,10 @@
     <ClInclude Include="Win32.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\..\AsyncTask.h">
+    <ClInclude Include="Calculation.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Calculation.h">
+    <ClInclude Include="..\..\AsyncTask.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

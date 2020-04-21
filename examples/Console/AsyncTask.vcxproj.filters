@@ -20,7 +20,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="AsyncTask.h">
+    <ClInclude Include="..\..\AsyncTask.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -1,11 +1,10 @@
-#include <iostream>
-#include <string>
-
-
 #include <exception>
 #include <future>
 #include <atomic>
 #include "../../AsyncTask.h"
+
+#include <iostream>
+#include <string>
 
 using namespace std;
 
@@ -37,6 +36,7 @@ protected:
   void onPreExecute() override { cout << "Time-consuming calculation:\n" << "Progress: 0%"; }
   void onProgressUpdate(int const& progress) override { cout << "\rProgress: " << progress << "%"; }
   void onPostExecute(Result const& result) override { cout << "\rProgress is finished."; }
+  void onCancelled() { cout << "\rProgress is cancelled."; }
 };
 
 int main()
