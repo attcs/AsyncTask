@@ -1,4 +1,4 @@
-# C++ AsyncTask.h
+# C++ AsyncTask
 AsyncTask is a C++ implementation of asynchronous task handling, including cancellation and progress feedback.<br>
 The class interface is based on the similarly named Android java class.
 
@@ -10,7 +10,7 @@ The class interface is based on the similarly named Android java class.
 * Asynchronous worker task should be defined by overriding doInBackground()
 * Check the interruption of the task with the isCacelled() in the doInBackground()
 * Current progress can be stored by publishProgress() in doInBackground()
-* Feedback system elements should be handled by the onPreExecute()/onProgressUpdate()/onPostExecute()
+* Feedback system elements should be handled by the onPreExecute()/onProgressUpdate()/onPostExecute()/onCancelled()
 * Parametrized Ctor() or execute() starts the doInBackground()
 * Refresh the feedback repeatedly by the onCallbackLoop()
 * get() returns the Result of doInBackground()
@@ -18,7 +18,7 @@ The class interface is based on the similarly named Android java class.
 # Notes
 * Header only implementation.
 * Non-copyable object. Instance can be used only once. Inplace reusage can be solved by smart pointers (e.g.: std::unique_ptr<AsyncTaskChild> and std::unique_ptr::reset()).
-* onCallbackLoop(), get(), ~AsyncTask() could rethrow the doInBackground() thrown exception. It is based on std::future object.
+* onCallbackLoop(), get(), ~AsyncTask() could rethrow the doInBackground() thrown exception. Cancellation's logical branch (e.g.: onCancelled()) will be executed.
 * If the AsyncTask is destructed while background task is running, ~AsyncTask() will execute the cancellation's logical branch. This could cause temporary freeze until doInBackground() finish, or other troubles, if the onCancelled()'s resources are invalid.
 * User interface, logsystem and other servicies can be attached by dependency injection.
 
@@ -45,6 +45,7 @@ The class interface is based on the similarly named Android java class.
         void onPreExecute() override { cout << "Time-consuming calculation:\n" << "Progress: 0%"; }
         void onProgressUpdate(int const& progress) override { cout << "\rProgress: " << progress << "%"; }
         void onPostExecute(Result const& result) override { cout << "\rProgress is finished."; }
+        void onCancelled() { cout << "\rProgress is cancelled."; }
     };
 
     int main()
