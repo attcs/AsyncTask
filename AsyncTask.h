@@ -19,7 +19,7 @@ public:
 // AsyncTask 
 // Asynchronous task progress handler class
 //  - Asynchronous worker task should be defined into the doInBackground(), 
-//  - Feedback system elements should be handled by the onPreExecute()/onProgressUpdate()/onPostExecute()
+//  - Feedback system elements should be handled by the onPreExecute()/onProgressUpdate()/onPostExecute()/onCancelled()
 //  - Parametrized Ctor() or execute() start the doInBackground()
 //  - Refresh the feedback by the onCallbackLoop()
 // Nocopy object. onCallbackLoop() and get() could rethrow the doInBackground() thrown exceptions.
@@ -40,6 +40,8 @@ private:
   std::future<Result> mFuture{}; // Future is a non-copyable object so AsyncTask also.
   std::atomic<Progress> atProgress{};
   std::atomic_bool atCancelled{};
+  std::atomic_bool isExceptionRethrowNeededOnMainThread = false;
+  std::exception_ptr eptr;
 
 public:
   AsyncTask() = default;
@@ -80,12 +82,19 @@ public:
     mStatus = Status::RUNNING;
 
     onPreExecute();
-    mFuture = std::async
-    (
-      std::launch::async,
-      [this](Params const&... params) { return postResult(doInBackground(params...)); }, 
-      params...
-    );
+    mFuture = std::async(std::launch::async,
+      [this](Params const&... params) -> Result
+      { 
+        try { return postResult(doInBackground(params...)); }
+        catch (...) // to ensure the cancellation's logical branch execution
+        {
+          cancel();
+          isExceptionRethrowNeededOnMainThread.store(true);
+          eptr = std::current_exception();
+        }
+        return {};
+      }, 
+      params...);
 
     return *this;
   }
@@ -96,7 +105,7 @@ public:
 protected:
 
   // Background worker task
-  // Exception can be thrown, future object will rethrow it in get(), onCallbackLoop() or Dtor()
+  // Exception can be thrown, it will be rethrown in get(), onCallbackLoop() or Dtor()
   // @WorkerThread
   virtual Result doInBackground(Params const&... params) = 0;
 
@@ -198,5 +207,8 @@ private:
       onPostExecute(mResult);
 
     mStatus = Status::FINISHED;
+
+    if (isExceptionRethrowNeededOnMainThread.load() && eptr)
+      std::rethrow_exception(eptr);
   }
 };
