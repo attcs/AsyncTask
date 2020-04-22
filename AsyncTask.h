@@ -20,7 +20,7 @@ public:
 // Asynchronous task progress handler class
 //  - Asynchronous worker task should be defined into the doInBackground(), 
 //  - Feedback system elements should be handled by the onPreExecute()/onProgressUpdate()/onPostExecute()/onCancelled()
-//  - Parametrized Ctor() or execute() start the doInBackground()
+//  - execute() start the doInBackground()
 //  - Refresh the feedback by the onCallbackLoop()
 // Nocopy object. onCallbackLoop() and get() could rethrow the doInBackground() thrown exceptions.
 template<typename Progress, typename Result, typename... Params>
@@ -30,8 +30,8 @@ public:
   enum class Status : int
   {
     PENDING, // Indicates that the task has not been executed yet.
-    RUNNING, // Indicates that the task is running.
-    FINISHED // Indicates that the task is finihsed: Cancelled, Exception was thrown or future object and AsyncTask::onPostExecute has finished.
+    RUNNING, // Indicates that the task is running. doInBackground's exception leave AsyncTask in this state.
+    FINISHED // Indicates that the task is finished.
   };
 
 private:
@@ -45,14 +45,13 @@ private:
 
 public:
   AsyncTask() = default;
-  explicit AsyncTask(Params const&... params) { execute(params); }
   
 protected:
   AsyncTask(AsyncTask const&) = delete;
   AsyncTask(AsyncTask&&) = delete;
   AsyncTask operator=(AsyncTask const&) = delete;
   AsyncTask operator=(AsyncTask&&) = delete;
-  virtual ~AsyncTask() 
+  virtual ~AsyncTask() noexcept
   {
     auto const status = getStatus();
     if (status != Status::RUNNING)
@@ -61,8 +60,11 @@ protected:
     if (!isCancelled())
       cancel();
 
-    if (mFuture.valid())
-      finish(mFuture.get());
+    if (!mFuture.valid())
+      return;
+
+    mFuture.wait();
+    // Exception rethrow could terminate the program if others already threw.
   };
 
 public:
@@ -85,8 +87,11 @@ public:
     mFuture = std::async(std::launch::async,
       [this](Params const&... params) -> Result
       { 
+        if (isCancelled())
+          return {}; // Protect against undefined behavoiur, if Dtor is invoked before the - pure virtual function represented - task would be started
+
         try { return postResult(doInBackground(params...)); }
-        catch (...) // to ensure the cancellation's logical branch execution
+        catch (...)
         {
           cancel();
           isExceptionRethrowNeededOnMainThread.store(true);
@@ -111,7 +116,7 @@ protected:
 
   // Post process result if it is needed, still on the worker thread
   // @WorkerThread
-  virtual Result postResult(Result&& result) noexcept { return result; }
+  virtual Result postResult(Result&& result) { return result; }
 
   // Usually to setup the feedback system
   // @MainThread
@@ -137,21 +142,21 @@ protected:
   }
 
   // Cleanup function if the task is cancelled
-  //@MainThread
+  // @MainThread
   virtual void onCancelled() {}
 
   // Cleanup function if the task is cancelled
-  //@MainThread
+  // @MainThread
   virtual void onCancelled(Result const& result) { onCancelled(); }
 
 public:
   // Returns true if the task is cancelled by the cancel()
   // It is usable to break process inside the doInBackground()
-  //@MainThread and @Workerthread
+  // @MainThread and @Workerthread
   bool isCancelled() const { return atCancelled.load(); }
 
   // Cancel the task
-  //@MainThread
+  // @MainThread
   void cancel() { atCancelled.store(true); }
 
   // Get the result.
@@ -170,11 +175,11 @@ public:
   // @MainThread
   bool onCallbackLoop()
   {
-    if (mStatus == Status::PENDING || !mFuture.valid())
-      return false;
-
     if (mStatus == Status::FINISHED)
       return true;
+
+    if (mStatus == Status::PENDING || !mFuture.valid())
+      return false;
 
     auto const statusThread = mFuture.wait_for(std::chrono::seconds(0));
 

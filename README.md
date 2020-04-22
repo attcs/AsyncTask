@@ -11,16 +11,15 @@ The class interface is based on the similarly named Android java class.
 * Check the interruption of the task with the isCacelled() in the doInBackground()
 * Current progress can be stored by publishProgress() in doInBackground()
 * Feedback system elements should be handled by the onPreExecute()/onProgressUpdate()/onPostExecute()/onCancelled()
-* Parametrized Ctor() or execute() starts the doInBackground()
+* execute() starts the doInBackground()
 * Refresh the feedback repeatedly by the onCallbackLoop()
 * get() returns the Result of doInBackground()
 
 # Notes
 * Header only implementation.
 * Non-copyable object. Instance can be used only once. Inplace reusage can be solved by smart pointers (e.g.: std::unique_ptr<AsyncTaskChild> and std::unique_ptr::reset()).
-* onCallbackLoop(), get(), ~AsyncTask() could rethrow the doInBackground() thrown exception. Cancellation's logical branch (e.g.: onCancelled()) will be executed.
-* If the AsyncTask is destructed while background task is running, ~AsyncTask() will execute the cancellation's logical branch. This could cause temporary freeze until doInBackground() finish, or other troubles, if the onCancelled()'s resources are invalid.
-* User interface, logsystem and other servicies can be attached by dependency injection.
+* onCallbackLoop() and get() could rethrow the doInBackground() thrown exception. onCancelled() would not be executed, AsyncTask' status will remain in RUNNUNG state.
+* If the AsyncTask is destructed while background task is running, ~AsyncTask() will cancel the doInBackground() and wait it's finish, onCancelled won't be invoked and exception wont be thrown.
 
 # Basic example
     ...
@@ -45,7 +44,7 @@ The class interface is based on the similarly named Android java class.
         void onPreExecute() override { cout << "Time-consuming calculation:\n" << "Progress: 0%"; }
         void onProgressUpdate(int const& progress) override { cout << "\rProgress: " << progress << "%"; }
         void onPostExecute(Result const& result) override { cout << "\rProgress is finished."; }
-        void onCancelled() { cout << "\rProgress is cancelled."; }
+        void onCancelled() override { cout << "\rProgress is cancelled."; }
     };
 
     int main()
