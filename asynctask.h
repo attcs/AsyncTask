@@ -30,7 +30,7 @@ public:
   enum class Status : int
   {
     PENDING, // Indicates that the task has not been executed yet.
-    RUNNING, // Indicates that the task is running. doInBackground's exception leave AsyncTask in this state.
+    RUNNING, // Indicates that the task is running.
     FINISHED // Indicates that the task is finished.
   };
 
@@ -64,7 +64,7 @@ protected:
       return;
 
     mFuture.wait();
-    // Exception rethrow could terminate the program if others already threw.
+    // Exception rethrow: No. It could terminate the program if others already threw.
   };
 
 public:
@@ -105,7 +105,7 @@ public:
   }
 
   // @MainThread
-  Status getStatus() const { return mStatus; }
+  Status getStatus() const noexcept { return mStatus; }
 
 protected:
 
@@ -153,11 +153,11 @@ public:
   // Returns true if the task is cancelled by the cancel()
   // It is usable to break process inside the doInBackground()
   // @MainThread and @Workerthread
-  bool isCancelled() const { return atCancelled.load(); }
+  bool isCancelled() const noexcept { return atCancelled.load(); }
 
   // Cancel the task
   // @MainThread
-  void cancel() { atCancelled.store(true); }
+  void cancel() noexcept { atCancelled.store(true); }
 
   // Get the result.
   // It could freeze the mainthread if it invoked before the task is finished. Exception from the doInBackground can be rethrown.

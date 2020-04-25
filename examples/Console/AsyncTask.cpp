@@ -1,7 +1,7 @@
 #include <exception>
 #include <future>
 #include <atomic>
-#include "../../AsyncTask.h"
+#include "../../asynctask.h"
 
 #include <iostream>
 #include <string>
@@ -46,10 +46,7 @@ int main()
   try
   {
     while (!pat.onCallbackLoop())
-    {
-      chrono::milliseconds timespan(120);
-      this_thread::sleep_for(timespan);
-    }
+      this_thread::sleep_for(chrono::milliseconds(120));
 
     cout << "\nThe result: " << pat.get();
   }
