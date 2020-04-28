@@ -16,7 +16,7 @@ The class interface is based on the similarly named Android java class.
 * `get()` returns the Result of `doInBackground()`
 
 ## Notes
-* Header only implementation (asynctask.h and the above metioned standard headers are required to be included).
+* Header only implementation (asynctask.h and the above mentioned standard headers are required to be included).
 * Non-copyable object. Instance can be used only once. Inplace reusage can be solved by smart pointers (e.g.: `std::unique_ptr<AsyncTaskChild>` and `std::unique_ptr::reset()`).
 * `onCallbackLoop()` and `get()` could rethrow the `doInBackground()` thrown exception. `onCancelled()` would not be executed.
 * If the AsyncTask is destructed while background task is running, `~AsyncTask()` will cancel the `doInBackground()` and wait it's finish, `onCancelled()` won't be invoked and exception wont be thrown.
@@ -25,11 +25,11 @@ The class interface is based on the similarly named Android java class.
 ## Basic example
 ```C++
     ...
-    class EmptyTaskWithProgressFeedback : public AsyncTask<Progress, Result, int, int>
+    class EmptyTaskWithProgressFeedback : public AsyncTask<Progress, string, int, int>
     {
     protected:
 
-        Result doInBackground(int const& p1, int const& p2) override
+        string doInBackground(int const& p1, int const& p2) override
         {
             auto const n = p1 + p2;
             for (int i = 0; i <= n; ++i)
