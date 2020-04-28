@@ -25,7 +25,7 @@ The class interface is based on the similarly named Android java class.
 ## Basic example
 ```C++
     ...
-    class EmptyTaskWithProgressFeedback : public AsyncTask<Progress, string, int, int>
+    class EmptyTaskWithProgressFeedback : public AsyncTask<int/*Pr.*/, string/*Rs.*/, int/*p1*/, int/*p2*/>
     {
     protected:
 
@@ -45,7 +45,7 @@ The class interface is based on the similarly named Android java class.
   
         void onPreExecute() override { cout << "Time-consuming calculation:\n" << "Progress: 0%"; }
         void onProgressUpdate(int const& progress) override { cout << "\rProgress: " << progress << "%"; }
-        void onPostExecute(Result const& result) override { cout << "\rProgress is finished."; }
+        void onPostExecute(string const& result) override { cout << "\rProgress is finished."; }
         void onCancelled() override { cout << "\rProgress is cancelled."; }
     };
 
