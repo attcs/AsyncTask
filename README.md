@@ -24,6 +24,7 @@ The class interface is based on the similarly named Android java class.
 
 ## Basic example
 ```C++
+    #include "asynctask.h"
     ...
     class EmptyTaskWithProgressFeedback : public AsyncTask<int/*Pr.*/, string/*Rs.*/, int/*p1*/, int/*p2*/>
     {
