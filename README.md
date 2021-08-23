@@ -1,6 +1,7 @@
 # C++ AsyncTask
 AsyncTask is a C++ implementation of asynchronous task handling, including cancellation and progress feedback.<br>
-The class interface is based on the similarly named Android java class.
+The class interface is based on the similarly named Android java class.<br>
+[Original AsyncTask reference](https://developer.android.com/reference/android/os/AsyncTask)
 
 ## Requirements
 * Language standard: C++14 or above
@@ -11,7 +12,8 @@ The class interface is based on the similarly named Android java class.
 * Check the interruption of the task with the `isCacelled()` in the `doInBackground()`
 * Current `Progress` can be stored by `publishProgress()` in `doInBackground()`
 * Feedback system elements should be handled by the `onPreExecute()`/`onProgressUpdate()`/`onPostExecute()`/`onCancelled()`
-* `execute()` starts the `doInBackground()`
+* `execute()` starts the async `doInBackground()`
+* On the main thread, using the public `cancel()` function could signal to the `doInBackground()` to interrupt itself.
 * Refresh the feedback repeatedly by the `onCallbackLoop()`
 * `get()` returns the `Result` of `doInBackground()`
 
@@ -26,7 +28,8 @@ The class interface is based on the similarly named Android java class.
 ```C++
     #include "asynctask.h"
     ...
-    class EmptyTaskWithProgressFeedback : public AsyncTask<int/*Pr.*/, string/*Rs.*/, int/*p1*/, int/*p2*/>
+    class EmptyTaskWithProgressFeedback : 
+        public AsyncTask<int/*Progress*/, string/*Result*/, int/*input: p1*/, int/*input: p2*/>
     {
     protected:
 
