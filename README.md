@@ -28,12 +28,16 @@ The class interface is based on the similarly named Android java class.<br>
 ```C++
     #include "asynctask.h"
     ...
-    class EmptyTaskWithProgressFeedback : 
-        public AsyncTask<int/*Progress*/, string/*Result*/, int/*input: p1*/, int/*input: p2*/>
+    using Result = string;
+    using Progress = int;
+    using Input1 = int;
+    using Input2 = int;
+    
+    class EmptyTaskWithProgressFeedback : public AsyncTask<Progress, Result, Input1, Input2>
     {
     protected:
 
-        string doInBackground(int const& p1, int const& p2) override
+        string doInBackground(Input1 const& p1, Input2 const& p2) override
         {
             auto const n = p1 + p2;
             for (int i = 0; i <= n; ++i)
@@ -42,24 +46,27 @@ The class interface is based on the similarly named Android java class.<br>
                 publishProgress(i);
                 
                 if (isCancelled()) 
-                    return "Empty, unfinished object";
+                    return Result("Empty, unfinished object");
             }
-            return "Finished result object";
+            return Result("Finished result object");
         }
   
         void onPreExecute() override { cout << "Time-consuming calculation:\n" << "Progress: 0%"; }
-        void onProgressUpdate(int const& progress) override { cout << "\rProgress: " << progress << "%"; }
-        void onPostExecute(string const& result) override { cout << "\rProgress is finished."; }
+        void onProgressUpdate(Progress const& progress) override { cout << "\rProgress: " << progress << "%"; }
+        void onPostExecute(Result const& result) override { cout << "\rProgress is finished."; }
         void onCancelled() override { cout << "\rProgress is cancelled."; }
     };
 
     int main()
     {
         EmptyTaskWithProgressFeedback pat;
-        pat.execute(50, 50);
+        Input1 p1 = 50;
+        Input2 p2 = 50;
+        pat.execute(p1, p2); // will invoke doInBackground
         while (!pat.onCallbackLoop())
             this_thread::sleep_for(chrono::milliseconds(120));
         
-        cout << "\nThe result: " << pat.get();
+        Result result = pat.get();
+        cout << "\nThe result: " << result;
     }
 ```
