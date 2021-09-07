@@ -1,6 +1,6 @@
 # C++ AsyncTask
 AsyncTask is a C++ implementation of asynchronous task handling, including cancellation and progress feedback.<br>
-The class interface is based on the similarly named Android java class.<br>
+The class interface is based on the similarly named Android java class, but avoids and/or elminates its major issues. E.g.: It is not tied to the any UI thread; `doInBackground()`'s exceptions are not swallowed; etc.<br>
 [Original AsyncTask reference](https://developer.android.com/reference/android/os/AsyncTask)
 
 ## Requirements
@@ -15,10 +15,11 @@ The class interface is based on the similarly named Android java class.<br>
 * `execute()` starts the async `doInBackground()`
 * On the main thread, using the public `cancel()` function could signal to the `doInBackground()` to interrupt itself.
 * Refresh the feedback repeatedly by the `onCallbackLoop()`
-* `get()` returns the `Result` of `doInBackground()`
+* `get()` returns the `Result` of `doInBackground()` and it waits for the result if it has to.
 
 ## Notes
 * Header only implementation (asynctask.h and the above mentioned standard headers are required to be included).
+* It is based on `std::future` and `std::atomic`, usable types are constrained by these solutions.
 * Non-copyable object. Instance can be used only once. Inplace reusage can be solved by smart pointers (e.g.: `std::unique_ptr<AsyncTaskChild>` and `std::unique_ptr::reset()`).
 * `onCallbackLoop()` and `get()` could rethrow the `doInBackground()` thrown exception. `onCancelled()` would not be executed.
 * If the AsyncTask is destructed while background task is running, `~AsyncTask()` will cancel the `doInBackground()` and wait its finish, `onCancelled()` will not be invoked and exception will not be thrown.
