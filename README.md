@@ -25,51 +25,77 @@ The class interface is based on the similarly named Android java class, but avoi
 * If the AsyncTask is destructed while background task is running, `~AsyncTask()` will cancel the `doInBackground()` and wait its finish, `onCancelled()` will not be invoked and exception will not be thrown.
 * `doInBackground()` could have any number of parameters due to the AsyncTask variadic template definition.
 * Unittests are attached. (GTEST)
+* Tested compilers: MSVC 2019, Clang 12.0.0, GCC 11.3
 
 ## Basic example
 ```C++
-    #include "asynctask.h"
-    ...
-    using Result = string;
-    using Progress = int;
-    using Input1 = int;
-    using Input2 = int;
-    
-    class EmptyTaskWithProgressFeedback : public AsyncTask<Progress, Result, Input1, Input2>
-    {
-    protected:
-        // Background thread for the job
-        Result doInBackground(Input1 const& p1, Input2 const& p2) override
-        {
-            auto const n = p1 + p2;
-            for (Progress progress = 0; progress <= n; ++progress)
-            {
-                this_thread::sleep_for(chrono::milliseconds(100)); // to simulate the time-consuming work
-                publishProgress(progress);
-                
-                if (isCancelled()) 
-                    return Result("Empty, unfinished object");
-            }
-            return Result("Finished result object");
-        }
-        
-        // Main thread feedback handling
-        void onPreExecute() override { cout << "Time-consuming calculation:\n" << "Progress: 0%"; }
-        void onProgressUpdate(Progress const& progress) override { cout << "\rProgress: " << progress << "%"; }
-        void onPostExecute(Result const& result) override { cout << "\rProgress is finished."; }
-        void onCancelled() override { cout << "\rProgress is cancelled."; }
-    };
+#define _GLIBCXX_USE_NANOSLEEP 
 
-    int main()
+#include "../../asynctask.h"
+#include <thread>
+
+#include <iostream>
+#include <string>
+
+using namespace std;
+
+using Progress = int;
+using InputParam1 = int;
+using InputParam2 = int;
+using Result = string;
+using Exception = string;
+
+class EmptyTaskWithProgressFeedback : public AsyncTask<Progress, Result, InputParam1, InputParam2>
+{
+protected:
+
+  Result doInBackground(InputParam1 const& p1, InputParam2 const& p2) override
+  {
+    auto const n = p1 + p2;
+    for (int i = 0; i <= n; ++i)
     {
-        EmptyTaskWithProgressFeedback pat;
-        Input1 p1 = 50;
-        Input2 p2 = 50;
-        pat.execute(p1, p2);             // will invoke doInBackground on a new thread
-        while (!pat.onCallbackLoop())    // if doInBackground() is finished, it returns true, stopping the loop
-            this_thread::sleep_for(chrono::milliseconds(120));        // to simulate the refresh rate of the UI
-        
-        Result result = pat.get();
-        cout << "\nThe result: " << result;
+      this_thread::sleep_for(chrono::milliseconds(100)); // simulate Background thread job's work.
+
+      publishProgress(i);
+
+      // throw Exception("Exception message sample"); // -> Comment out to test exception handling
+
+      if (isCancelled()) 
+        return "Empty, unfinished object";
     }
+
+    return "Finished result object";
+  }
+  
+  void onPreExecute() override { cout << "Time-consuming calculation:\n" << "Progress: 0%" << flush; }
+  void onProgressUpdate(Progress const& progress) override { cout << "\rProgress: " << progress << "%" << flush; }
+  void onPostExecute(Result const& result) override { cout << "\rProgress is finished." << flush; }
+  void onCancelled() override { cout << "\rProgress is canceled." << flush; }
+};
+
+int main()
+{
+  try
+  {
+    EmptyTaskWithProgressFeedback asynctask;
+
+    InputParam1 p1 = 50;
+    InputParam1 p2 = 50;
+    asynctask.execute(p1, p2); // call doInBackground() asynchronously
+
+    for (int nRender = 0; !asynctask.onCallbackLoop(); ++nRender) // if doInBackground() is finished it will stop the loop
+    {
+      this_thread::sleep_for(chrono::milliseconds(120)); // simulate main thread job's work, e.g.: rendering
+
+      if (nRender > 100) // -> Reduce this number to check Cancellation
+        asynctask.cancel();
+    }
+
+    cout << "\nThe result: " << asynctask.get() << endl;
+  }
+  catch (Exception const& e)
+  {
+    cout << "\nException was thrown: " << e << endl;
+  }
+}
 ```
