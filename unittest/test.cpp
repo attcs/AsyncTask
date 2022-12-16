@@ -285,7 +285,7 @@ namespace AsyncTaskTest
       int postResult(int&& r) override
       {
         log->Add(LogService::Event::postResult);
-        return r;
+        return std::move(r);
       }
     };
 
