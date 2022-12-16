@@ -63,7 +63,7 @@ private:
   std::future<Result> mFuture{}; // Future is a non-copyable object so AsyncTask also.
   std::atomic<Progress> atProgress{};
   std::atomic_bool atCancelled{};
-  std::atomic_bool isExceptionRethrowNeededOnMainThread = false;
+  std::atomic_bool isExceptionRethrowNeededOnMainThread = { false };
   std::exception_ptr eptr;
 
 public:
@@ -72,8 +72,8 @@ public:
 protected:
   AsyncTask(AsyncTask const&) = delete;
   AsyncTask(AsyncTask&&) = delete;
-  AsyncTask operator=(AsyncTask const&) = delete;
-  AsyncTask operator=(AsyncTask&&) = delete;
+  AsyncTask& operator=(AsyncTask const&) = delete;
+  AsyncTask& operator=(AsyncTask&&) = delete;
   virtual ~AsyncTask() noexcept
   {
     auto const status = getStatus();
@@ -139,7 +139,7 @@ protected:
 
   // Post process result if it is needed, still on the worker thread
   // @WorkerThread
-  virtual Result postResult(Result&& result) { return result; }
+  virtual Result postResult(Result&& result) { return std::move(result); }
 
   // Usually to setup the feedback system
   // @MainThread
@@ -164,16 +164,16 @@ protected:
     atProgress.store(progress);
   }
 
-  // Cleanup function if the task is cancelled
+  // Cleanup function if the task is canceled
   // @MainThread
   virtual void onCancelled() {}
 
-  // Cleanup function if the task is cancelled
+  // Cleanup function if the task is canceled
   // @MainThread
   virtual void onCancelled(Result const& result) { onCancelled(); }
 
 public:
-  // Returns true if the task is cancelled by the cancel()
+  // Returns true if the task is canceled by the cancel()
   // It is usable to break process inside the doInBackground()
   // @MainThread and @Workerthread
   bool isCancelled() const noexcept { return atCancelled.load(); }
