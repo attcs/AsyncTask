@@ -19,7 +19,6 @@ The class interface is based on the similarly named Android java class, but avoi
 
 ## Notes
 * Header only implementation (asynctask.h and the above mentioned standard headers are required to be included).
-* It is based on `std::future` and `std::atomic`, usable types are constrained by these solutions.
 * Non-copyable object. Instance can be used only once. Inplace reusage can be solved by smart pointers (e.g.: `std::unique_ptr<AsyncTaskChild>` and `std::unique_ptr::reset()`).
 * `onCallbackLoop()` and `get()` could rethrow the `doInBackground()`'s exception. In this case, `onCancelled()` would not be executed.
 * If the AsyncTask is destructed while background task is running, `~AsyncTask()` will cancel the `doInBackground()` and wait its finish, `onCancelled()` will not be invoked and exception will not be thrown.
