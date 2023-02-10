@@ -25,6 +25,7 @@ SOFTWARE.
 #include <exception>
 #include <future>
 #include <atomic>
+#include <mutex>
 
 
 class IllegalStateException : std::exception
@@ -61,7 +62,8 @@ private:
   Status mStatus = Status::PENDING;
   Result mResult{};
   std::future<Result> mFuture{}; // Future is a non-copyable object so AsyncTask also.
-  std::atomic<Progress> atProgress{};
+  std::mutex mProgressMutex{};
+  Progress mProgress{};
   std::atomic_bool atCancelled{};
   std::atomic_bool isExceptionRethrowNeededOnMainThread = { false };
   std::exception_ptr eptr;
@@ -161,7 +163,8 @@ protected:
     if (isCancelled())
       return;
 
-    atProgress.store(progress);
+    std::lock_guard<std::mutex> sg(mProgressMutex);
+    mProgress = progress;
   }
 
   // Cleanup function if the task is canceled
@@ -212,7 +215,7 @@ public:
         return false;
 
       case std::future_status::timeout:
-        onProgressUpdate(atProgress.load());
+        onProgressUpdate(mProgress);
         return false;
 
       case std::future_status::ready:
