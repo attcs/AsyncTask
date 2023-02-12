@@ -38,7 +38,7 @@ protected:
   
   void onPreExecute() override { cout << "Time-consuming calculation:\n" << "Progress: 0%" << flush; }
   void onProgressUpdate(Progress const& progress) override { cout << "\rProgress: " << progress << "%" << flush; }
-  void onPostExecute(Result const& result) override { cout << "\rProgress is finished." << flush; }
+  void onPostExecute(Result const&) override { cout << "\rProgress is finished." << flush; }
   void onCancelled() override { cout << "\rProgress is canceled." << flush; }
 };
 

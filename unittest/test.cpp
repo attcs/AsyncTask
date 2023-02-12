@@ -3,6 +3,9 @@
 #include <exception>
 #include <future>
 #include <atomic>
+#include <vector>
+#include <string>
+
 #include "../asynctask.h"
 
 namespace
@@ -43,8 +46,8 @@ namespace AsyncTaskTest
 
   protected:
     void onPreExecute() override { log->Add(LogService::Event::onPreExecute); }
-    void onProgressUpdate(int const& progress) override { log->Add(LogService::Event::onProgressUpdate); }
-    void onPostExecute(int const& result) override { log->Add(LogService::Event::onPostExecute); }
+    void onProgressUpdate(int const&) override { log->Add(LogService::Event::onProgressUpdate); }
+    void onPostExecute(int const&) override { log->Add(LogService::Event::onPostExecute); }
     void onCancelled() override { log->Add(LogService::Event::onCancelled); }
   };
 
@@ -252,13 +255,15 @@ namespace AsyncTaskTest
 
   namespace WorkerThread
   {
-    class AsyncTaskWorkerLog : public AsyncTask<int, int, int>
+    template<typename Progress = int>
+    class AsyncTaskWorkerLogProgressTemplate : public AsyncTask<Progress, int, int>
     {
     private:
       LogService* log = nullptr;
+      std::chrono::milliseconds const& t;
 
     public:
-      AsyncTaskWorkerLog(LogService* log) : log(log) {}
+      AsyncTaskWorkerLogProgressTemplate(LogService* log, std::chrono::milliseconds const& t = std::chrono::milliseconds(10)) : log(log), t(t) {}
 
     protected:
       int doInBackground(int const& n) override
@@ -267,19 +272,19 @@ namespace AsyncTaskTest
 
         for (int i = 0; i < n; ++i)
         {
-          Wait();
-          publishProgress(i);
-          if (isCancelled())
+          Wait(t);
+          publishProgress(Progress(i));
+          if (this->isCancelled())
             return 0;
         }
 
         return 1;
       }
 
-      void publishProgress(int const& p) override
+      void publishProgress(Progress const& p) override
       {
         log->Add(LogService::Event::publishProgress);
-        AsyncTask<int, int, int>::publishProgress(p);
+        AsyncTask<Progress, int, int>::publishProgress(p);
       }
 
       int postResult(int&& r) override
@@ -288,6 +293,8 @@ namespace AsyncTaskTest
         return std::move(r);
       }
     };
+
+    using AsyncTaskWorkerLog = AsyncTaskWorkerLogProgressTemplate<int>;
 
     TEST(WorkerThread, get_doInBackground_postResult_LogHas)
     {
@@ -307,6 +314,72 @@ namespace AsyncTaskTest
       EXPECT_TRUE(log.Has(LogService::Event::doInBackground));
       EXPECT_TRUE(log.Has(LogService::Event::postResult));
     }
+
+    TEST(WorkerThread, publishProgress_StressTest)
+    {
+      LogService log{};
+
+      struct Progress
+      {
+        std::vector<int> dataMember;
+        std::wstring dataMemberString;
+
+        Progress() = default;
+        Progress(int i) { dataMember.resize(1000000); dataMember[1] = i; };
+      };
+      try
+      {
+        AsyncTaskWorkerLogProgressTemplate<Progress> at(&log, std::chrono::milliseconds{0});
+        at.execute(1000);
+        while (!at.onCallbackLoop());
+        {
+          Wait({});
+        }
+        at.get();
+      }
+      catch (...)
+      {
+        EXPECT_TRUE(false);
+      }
+
+      EXPECT_TRUE(log.Has(LogService::Event::doInBackground));
+      EXPECT_TRUE(log.Has(LogService::Event::postResult));
+    }
+
+    TEST(WorkerThread, publishProgress_ExceptionAtCopy)
+    {
+      constexpr int iSurprise = 11;
+      struct Progress
+      {
+        std::vector<int> dataMember;
+
+        Progress() = default;
+        Progress(int i) { dataMember.resize(100000); dataMember[1] = i; };
+        
+        Progress(Progress const&) { throw iSurprise; };
+        Progress& operator= (Progress const&) { throw iSurprise; return *this; };
+
+        Progress(Progress &&) { throw iSurprise; };
+        Progress& operator&& (Progress&&) { throw iSurprise; return *this; };
+        
+      };
+
+      LogService log{};
+      try
+      {
+        AsyncTaskWorkerLogProgressTemplate<Progress> at(&log, std::chrono::milliseconds{ 0 });
+        at.execute(1000);
+        at.get();
+      }
+      catch (decltype(iSurprise) const& ex)
+      {
+        EXPECT_EQ(ex, iSurprise);
+      }
+
+      EXPECT_TRUE(log.Has(LogService::Event::doInBackground));
+      EXPECT_TRUE(log.Has(LogService::Event::publishProgress));
+    }
+
 
     TEST(WorkerThread, get_doInBackground_postResult_publishProgress_LogHas)
     {

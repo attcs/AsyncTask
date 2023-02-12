@@ -26,7 +26,7 @@ SOFTWARE.
 #include <future>
 #include <atomic>
 #include <mutex>
-
+#include <type_traits>
 
 class IllegalStateException : std::exception
 {
@@ -60,11 +60,66 @@ public:
 
 private:
   Status mStatus = Status::PENDING;
+
+  // Result handling
   Result mResult{};
   std::future<Result> mFuture{}; // Future is a non-copyable object so AsyncTask also.
-  std::mutex mProgressMutex{};
-  Progress mProgress{};
+  
+  // Progress handling
+  template<typename Data>
+  struct ThreadSafeContainer
+  {
+  private:
+    Data mData{};
+    mutable std::mutex mMutex{};
+    mutable std::condition_variable mCV{};
+    bool mIsStoringFinished = true;
+
+  public:
+    void store(Data const& data)
+    {
+      std::unique_lock<std::mutex> lock(mMutex);
+      try
+      {
+        mIsStoringFinished = false;
+        mData = data;
+        mIsStoringFinished = true;
+      }
+      catch (...)
+      {
+        mIsStoringFinished = true;
+        throw;
+      }
+
+      lock.unlock();
+      mCV.notify_one();
+    }
+
+    Data load() const
+    {
+      std::unique_lock<std::mutex> lock(mMutex);
+      mCV.wait(lock, [&] { return this->mIsStoringFinished; });
+      return mData;
+    }
+  };
+
+  static bool constexpr isProgressAtomicCompatible = std::is_trivially_copyable_v<Progress>
+    && std::is_copy_constructible_v<Progress>
+    && std::is_move_constructible_v<Progress>
+    && std::is_copy_assignable_v<Progress>
+    && std::is_move_assignable_v<Progress>;
+
+  using ProgressContainer = typename std::conditional<isProgressAtomicCompatible
+    , std::atomic<Progress>
+    , ThreadSafeContainer<Progress>
+  >::type;
+
+  ProgressContainer mProgress;
+
+  // Cancellation handling
   std::atomic_bool atCancelled{};
+
+  // Exception handling
   std::atomic_bool isExceptionRethrowNeededOnMainThread = { false };
   std::exception_ptr eptr;
 
@@ -149,11 +204,11 @@ protected:
 
   // Usually to declare the finishing in the feedback system
   // @MainThread
-  virtual void onPostExecute(Result const& result) {}
+  virtual void onPostExecute(Result const&) {}
 
   // Show progress in the feedback system
   // @MainThread
-  virtual void onProgressUpdate(Progress const& values) {}
+  virtual void onProgressUpdate(Progress const&) {}
 
   // Store the current state of the progress inside the class
   // Use inside the doInBackground()
@@ -163,8 +218,7 @@ protected:
     if (isCancelled())
       return;
 
-    std::lock_guard<std::mutex> sg(mProgressMutex);
-    mProgress = progress;
+    mProgress.store(progress);
   }
 
   // Cleanup function if the task is canceled
@@ -173,7 +227,7 @@ protected:
 
   // Cleanup function if the task is canceled
   // @MainThread
-  virtual void onCancelled(Result const& result) { onCancelled(); }
+  virtual void onCancelled(Result const&) { onCancelled(); }
 
 public:
   // Returns true if the task is canceled by the cancel()
@@ -215,7 +269,7 @@ public:
         return false;
 
       case std::future_status::timeout:
-        onProgressUpdate(mProgress);
+        onProgressUpdate(mProgress.load());
         return false;
 
       case std::future_status::ready:
