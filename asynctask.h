@@ -72,33 +72,17 @@ private:
   private:
     Data mData{};
     mutable std::mutex mMutex{};
-    mutable std::condition_variable mCV{};
-    bool mIsStoringFinished = true;
 
   public:
     void store(Data const& data)
     {
       std::unique_lock<std::mutex> lock(mMutex);
-      try
-      {
-        mIsStoringFinished = false;
-        mData = data;
-        mIsStoringFinished = true;
-      }
-      catch (...)
-      {
-        mIsStoringFinished = true;
-        throw;
-      }
-
-      lock.unlock();
-      mCV.notify_one();
+      mData = data;
     }
 
     Data load() const
     {
       std::unique_lock<std::mutex> lock(mMutex);
-      mCV.wait(lock, [&] { return this->mIsStoringFinished; });
       return mData;
     }
   };
