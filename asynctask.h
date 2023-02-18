@@ -28,15 +28,15 @@ SOFTWARE.
 #include <mutex>
 #include <type_traits>
 
-class IllegalStateException
+class AsyncTaskIllegalStateException
 {
 public:
   enum class eEx : int { TaskIsAlreadyRunning, TaskIsAlreadyFinished };
 
   eEx e;
 
-  IllegalStateException() = default;
-  IllegalStateException(eEx e) : e(e) {}
+  AsyncTaskIllegalStateException() = default;
+  AsyncTaskIllegalStateException(eEx e) : e(e) {}
 };
 
 
@@ -134,15 +134,15 @@ protected:
 public:
 
   // Initiate the asynchronous task
-  // If the task is already began, IllegalStateException will be thrown
+  // If the task is already began, AsyncTaskIllegalStateException will be thrown
   // @MainThread
-  AsyncTask<Progress, Result, Params...>& execute(Params const&... params)
+  AsyncTask<Progress, Result, Params...>& execute(Params const&... params) noexcept(false)
   {
     switch (mStatus)
     {
       case Status::PENDING: break; // Everything is ok.
-      case Status::RUNNING: throw IllegalStateException(IllegalStateException::eEx::TaskIsAlreadyRunning);
-      case Status::FINISHED: throw IllegalStateException(IllegalStateException::eEx::TaskIsAlreadyFinished);
+      case Status::RUNNING: throw AsyncTaskIllegalStateException(AsyncTaskIllegalStateException::eEx::TaskIsAlreadyRunning);
+      case Status::FINISHED: throw AsyncTaskIllegalStateException(AsyncTaskIllegalStateException::eEx::TaskIsAlreadyFinished);
     }
 
     mStatus = Status::RUNNING;

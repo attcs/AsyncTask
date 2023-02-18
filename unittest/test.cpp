@@ -110,9 +110,9 @@ namespace AsyncTaskTest
       {
         atb.execute(5);
       }
-      catch (IllegalStateException const& e)
+      catch (AsyncTaskIllegalStateException const& e)
       {
-        EXPECT_EQ(IllegalStateException::eEx::TaskIsAlreadyRunning, e.e);
+        EXPECT_EQ(AsyncTaskIllegalStateException::eEx::TaskIsAlreadyRunning, e.e);
       }
       catch (...)
       {
@@ -131,9 +131,9 @@ namespace AsyncTaskTest
       {
         atb.execute(5);
       }
-      catch (IllegalStateException const& e)
+      catch (AsyncTaskIllegalStateException const& e)
       {
-        EXPECT_EQ(IllegalStateException::eEx::TaskIsAlreadyFinished, e.e);
+        EXPECT_EQ(AsyncTaskIllegalStateException::eEx::TaskIsAlreadyFinished, e.e);
       }
       catch (...)
       {
@@ -374,6 +374,10 @@ namespace AsyncTaskTest
       catch (decltype(iSurprise) const& ex)
       {
         EXPECT_EQ(ex, iSurprise);
+      }
+      catch (AsyncTaskIllegalStateException const&)
+      {
+        EXPECT_TRUE(false);
       }
 
       EXPECT_TRUE(log.Has(LogService::Event::doInBackground));
