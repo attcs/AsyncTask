@@ -28,7 +28,7 @@ SOFTWARE.
 #include <mutex>
 #include <type_traits>
 
-class IllegalStateException : std::exception
+class IllegalStateException
 {
 public:
   enum class eEx : int { TaskIsAlreadyRunning, TaskIsAlreadyFinished };
