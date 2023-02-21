@@ -74,6 +74,12 @@ private:
     mutable std::mutex mMutex{};
 
   public:
+    ThreadSafeContainer() = default;
+    ThreadSafeContainer(ThreadSafeContainer const&) = delete;
+    ThreadSafeContainer(ThreadSafeContainer&&) = delete;
+    ThreadSafeContainer& operator=(ThreadSafeContainer const&) = delete;
+    ThreadSafeContainer& operator=(ThreadSafeContainer&&) = delete;
+
     void store(Data const& data)
     {
       std::unique_lock<std::mutex> lock(mMutex);
