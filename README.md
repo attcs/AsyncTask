@@ -16,6 +16,7 @@ The class interface is based on the similarly named Android java class, but avoi
 * On the main thread, using the public `cancel()` function could signal to the `doInBackground()` to interrupt itself.
 * Refresh the feedback repeatedly by the `onCallbackLoop()`, it will return `true` if `doInBackground()` is finished. 
 * `get()` returns the `Result` of `doInBackground()` and it waits for the result if it has to.
+* Inherit from `AsyncTaskPQ` if every published progress items must be handled and override `isLastProgressShouldBeOverride()` if you want to reduce the number of progress steps.
 
 ## Notes
 * Header only implementation (asynctask.h and the above mentioned standard headers are required to be included).

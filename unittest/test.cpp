@@ -62,7 +62,10 @@ namespace AsyncTaskTest
       int doInBackground(int const& n) override
       {
         for (int i = 0; i < n; ++i)
+        {
           Wait();
+          publishProgress(i);
+        }
 
         return isCancelled() ? 0 : 1;
       }
@@ -178,7 +181,7 @@ namespace AsyncTaskTest
       AsyncTaskBasicInt atb(&log);
 
       atb.execute(5);
-      atb.onCallbackLoop();
+      while(!atb.onCallbackLoop());
       EXPECT_TRUE(log.Has(LogService::Event::onProgressUpdate));
     }
 

@@ -27,6 +27,7 @@ SOFTWARE.
 #include <atomic>
 #include <mutex>
 #include <type_traits>
+#include <queue>
 
 class AsyncTaskIllegalStateException
 {
@@ -254,6 +255,7 @@ private:
 };
 
 
+// General AsyncTask
 template<typename Progress, typename Result, typename... Params>
 class AsyncTask : public AsyncTaskBase<Progress, Result, Params...>
 {
@@ -291,7 +293,7 @@ private:
     && std::is_move_constructible_v<Progress>
     && std::is_copy_assignable_v<Progress>
     && std::is_move_assignable_v<Progress>;
-    
+
   using ProgressContainer = typename std::conditional<isProgressAtomicCompatible
     , std::atomic<Progress>
     , ThreadSafeContainer<Progress>
@@ -300,8 +302,8 @@ private:
   ProgressContainer mProgress;
 
 protected:
+
   // Store the current state of the progress inside the class
-  // Use inside the doInBackground()
   // @WorkerThread
   void storeProgress(Progress const& progress) override
   {
@@ -318,7 +320,80 @@ protected:
     this->onProgressUpdate(mProgress.load());
   }
 
+public:
+  using AsyncTaskBase<Progress, Result, Params...>::AsyncTaskBase;
+};
+
+
+// AsyncTaskPQ: AsyncTask using Progress Queue to handle progress queue in the proper order and handle every published progress item
+template<typename Progress, typename Result, typename... Params>
+class AsyncTaskPQ : public AsyncTaskBase<Progress, Result, Params...>
+{
+private:
+  // Progress handling
+  template<typename Data>
+  struct ThreadSafeQueue
+  {
+  private:
+    std::queue<Data> mData{};
+    mutable std::mutex mMutex{};
+
+  public:
+    ThreadSafeQueue() = default;
+    ThreadSafeQueue(ThreadSafeQueue const&) = delete;
+    ThreadSafeQueue(ThreadSafeQueue&&) = delete;
+    ThreadSafeQueue& operator=(ThreadSafeQueue const&) = delete;
+    ThreadSafeQueue& operator=(ThreadSafeQueue&&) = delete;
+
+    template<typename BinaryOp>
+    void store(Data const& data, BinaryOp fnLastShouldBeOverride)
+    {
+      std::unique_lock<std::mutex> lock(mMutex);
+      if (mData.empty() || !fnLastShouldBeOverride(mData.back(), data))
+        mData.push(data);
+      else
+        mData.back() = data;
+    }
+
+
+    std::queue<Data> move()
+    {
+      std::unique_lock<std::mutex> lock(mMutex);
+      auto const mDataMoved = std::move(mData);
+      return mDataMoved;
+    }
+  };
+
+  ThreadSafeQueue<Progress> mProgressQueue;
+
+protected:
+
+  // To define condition when not all progress item wanted to be stored.
+  // @WorkerThread
+  virtual bool isLastProgressShouldBeOverride(Progress const& progressOld, Progress const& progressNew) const { return false; }
+  
+  // Store the current state of the progress inside the class
+  // @WorkerThread
+  void storeProgress(Progress const& progress) override
+  {
+    // or use overrideLast() in special cases.
+    this->mProgressQueue.store(progress, [this](Progress const& progressOld, Progress const& progressNew) 
+    { 
+      return this->isLastProgressShouldBeOverride(progressOld, progressNew);
+    });
+  }
+
+  // Show progress in the feedback system
+  // @MainThread
+  virtual void onProgressUpdate(Progress const&) {}
+
+protected:
+  virtual void handleProgress() override final
+  {
+    for (auto progressQueue = mProgressQueue.move(); !progressQueue.empty(); progressQueue.pop())
+      this->onProgressUpdate(progressQueue.front());
+  }
 
 public:
-  using AsyncTaskBase::AsyncTaskBase;
+  using AsyncTaskBase<Progress, Result, Params...>::AsyncTaskBase;
 };
