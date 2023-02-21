@@ -273,7 +273,7 @@ namespace AsyncTaskTest
         for (int i = 0; i < n; ++i)
         {
           Wait(t);
-          publishProgress(Progress(i));
+          this->publishProgress(Progress(i));
           if (this->isCancelled())
             return 0;
         }
@@ -281,10 +281,10 @@ namespace AsyncTaskTest
         return 1;
       }
 
-      void publishProgress(Progress const& p) override
+      void storeProgress(Progress const& p) override
       {
         log->Add(LogService::Event::publishProgress);
-        AsyncTask<Progress, int, int>::publishProgress(p);
+        AsyncTask<Progress, int, int>::storeProgress(p);
       }
 
       int postResult(int&& r) override
@@ -345,29 +345,29 @@ namespace AsyncTaskTest
       EXPECT_TRUE(log.Has(LogService::Event::doInBackground));
       EXPECT_TRUE(log.Has(LogService::Event::postResult));
     }
+    
+    constexpr int iSurprise = 11;
+    struct ProgressExceptionThrowing
+    {
+      std::vector<int> dataMember;
+
+      ProgressExceptionThrowing() = default;
+      ProgressExceptionThrowing(int i) { dataMember.resize(100000); dataMember[1] = i; };
+
+      ProgressExceptionThrowing(ProgressExceptionThrowing const&) { throw iSurprise; };
+      ProgressExceptionThrowing& operator= (ProgressExceptionThrowing const&) { throw iSurprise; return *this; };
+
+      ProgressExceptionThrowing(ProgressExceptionThrowing&&) { throw iSurprise; };
+      ProgressExceptionThrowing& operator&& (ProgressExceptionThrowing&&) { throw iSurprise; return *this; };
+
+    };
 
     TEST(WorkerThread, publishProgress_ExceptionAtCopy)
     {
-      constexpr int iSurprise = 11;
-      struct Progress
-      {
-        std::vector<int> dataMember;
-
-        Progress() = default;
-        Progress(int i) { dataMember.resize(100000); dataMember[1] = i; };
-        
-        Progress(Progress const&) { throw iSurprise; };
-        Progress& operator= (Progress const&) { throw iSurprise; return *this; };
-
-        Progress(Progress &&) { throw iSurprise; };
-        Progress& operator&& (Progress&&) { throw iSurprise; return *this; };
-        
-      };
-
       LogService log{};
       try
       {
-        AsyncTaskWorkerLogProgressTemplate<Progress> at(&log, std::chrono::milliseconds{ 0 });
+        AsyncTaskWorkerLogProgressTemplate<ProgressExceptionThrowing> at(&log, std::chrono::milliseconds{ 0 });
         at.execute(1000);
         at.get();
       }
@@ -382,6 +382,26 @@ namespace AsyncTaskTest
 
       EXPECT_TRUE(log.Has(LogService::Event::doInBackground));
       EXPECT_TRUE(log.Has(LogService::Event::publishProgress));
+    }
+
+
+    TEST(WorkerThread, publishProgress_ExceptionAtCopyDtor)
+    {
+      LogService log{};
+      try
+      {
+        AsyncTaskWorkerLogProgressTemplate<ProgressExceptionThrowing> at(&log, std::chrono::milliseconds{ 0 });
+        at.execute(1000);
+      }
+      catch (decltype(iSurprise) const& ex)
+      {
+        EXPECT_EQ(ex, iSurprise); // if it is throw that would be
+        EXPECT_TRUE(false); // But dtor should not throw anyway.
+      }
+      catch (AsyncTaskIllegalStateException const&)
+      {
+        EXPECT_TRUE(false);
+      }
     }
 
 

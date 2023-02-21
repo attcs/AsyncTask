@@ -40,6 +40,7 @@ public:
 };
 
 
+
 // AsyncTask 
 // Asynchronous task progress handler class
 //  - Asynchronous worker task should be defined into the doInBackground(), 
@@ -48,7 +49,7 @@ public:
 //  - Refresh the feedback by the onCallbackLoop()
 // Nocopy object. onCallbackLoop() and get() could rethrow the doInBackground() thrown exceptions.
 template<typename Progress, typename Result, typename... Params>
-class AsyncTask
+class AsyncTaskBase
 {
 public:
   enum class Status : int
@@ -64,47 +65,6 @@ private:
   // Result handling
   Result mResult{};
   std::future<Result> mFuture{}; // Future is a non-copyable object so AsyncTask also.
-  
-  // Progress handling
-  template<typename Data>
-  struct ThreadSafeContainer
-  {
-  private:
-    Data mData{};
-    mutable std::mutex mMutex{};
-
-  public:
-    ThreadSafeContainer() = default;
-    ThreadSafeContainer(ThreadSafeContainer const&) = delete;
-    ThreadSafeContainer(ThreadSafeContainer&&) = delete;
-    ThreadSafeContainer& operator=(ThreadSafeContainer const&) = delete;
-    ThreadSafeContainer& operator=(ThreadSafeContainer&&) = delete;
-
-    void store(Data const& data)
-    {
-      std::unique_lock<std::mutex> lock(mMutex);
-      mData = data;
-    }
-
-    Data load() const
-    {
-      std::unique_lock<std::mutex> lock(mMutex);
-      return mData;
-    }
-  };
-
-  static bool constexpr isProgressAtomicCompatible = std::is_trivially_copyable_v<Progress>
-    && std::is_copy_constructible_v<Progress>
-    && std::is_move_constructible_v<Progress>
-    && std::is_copy_assignable_v<Progress>
-    && std::is_move_assignable_v<Progress>;
-
-  using ProgressContainer = typename std::conditional<isProgressAtomicCompatible
-    , std::atomic<Progress>
-    , ThreadSafeContainer<Progress>
-  >::type;
-
-  ProgressContainer mProgress;
 
   // Cancellation handling
   std::atomic_bool atCancelled{};
@@ -114,26 +74,26 @@ private:
   std::exception_ptr eptr;
 
 public:
-  AsyncTask() = default;
+  AsyncTaskBase() = default;
   
 protected:
-  AsyncTask(AsyncTask const&) = delete;
-  AsyncTask(AsyncTask&&) = delete;
-  AsyncTask& operator=(AsyncTask const&) = delete;
-  AsyncTask& operator=(AsyncTask&&) = delete;
-  virtual ~AsyncTask() noexcept
+  AsyncTaskBase(AsyncTaskBase const&) = delete;
+  AsyncTaskBase(AsyncTaskBase&&) = delete;
+  AsyncTaskBase& operator=(AsyncTaskBase const&) = delete;
+  AsyncTaskBase& operator=(AsyncTaskBase&&) = delete;
+  virtual ~AsyncTaskBase() noexcept
   {
     auto const status = getStatus();
     if (status != Status::RUNNING)
       return;
 
-    if (!isCancelled())
-      cancel();
+    if (!this->isCancelled())
+      this->cancel();
 
-    if (!mFuture.valid())
+    if (!this->mFuture.valid())
       return;
-
-    mFuture.wait();
+    
+    this->mFuture.wait();
     // Exception rethrow: No. It could terminate the program if others already threw.
   };
 
@@ -142,7 +102,7 @@ public:
   // Initiate the asynchronous task
   // If the task is already began, AsyncTaskIllegalStateException will be thrown
   // @MainThread
-  AsyncTask<Progress, Result, Params...>& execute(Params const&... params) noexcept(false)
+  AsyncTaskBase<Progress, Result, Params...>& execute(Params const&... params) noexcept(false)
   {
     switch (mStatus)
     {
@@ -151,16 +111,16 @@ public:
       case Status::FINISHED: throw AsyncTaskIllegalStateException(AsyncTaskIllegalStateException::eEx::TaskIsAlreadyFinished);
     }
 
-    mStatus = Status::RUNNING;
+    this->mStatus = Status::RUNNING;
 
-    onPreExecute();
-    mFuture = std::async(std::launch::async,
+    this->onPreExecute();
+    this->mFuture = std::async(std::launch::async,
       [this](Params const&... params) -> Result
       { 
         if (isCancelled())
           return {}; // Protect against undefined behavoiur, if Dtor is invoked before the - pure virtual function represented - task would be started
 
-        try { return postResult(doInBackground(params...)); }
+        try { return this->postResult(this->doInBackground(params...)); }
         catch (...)
         {
           cancel();
@@ -184,6 +144,23 @@ protected:
   // @WorkerThread
   virtual Result doInBackground(Params const&... params) = 0;
 
+  // Define the store mechanism of the current state of the progress inside the class
+  // @WorkerThread
+  virtual void storeProgress(Progress const&) {}
+
+  // Store the current state of the progress inside the class
+  // Use inside the doInBackground()
+  // @WorkerThread
+  void publishProgress(Progress const& progress)
+  {
+    // doInBackground() could invoke publishProgress() during dtor(), so publishProgress() must be a non-virtual function and prevent to call virtual ones using isCancelled()
+    if (isCancelled())
+      return;
+
+    this->storeProgress(progress);
+  }
+
+public:
   // Post process result if it is needed, still on the worker thread
   // @WorkerThread
   virtual Result postResult(Result&& result) { return std::move(result); }
@@ -196,21 +173,6 @@ protected:
   // @MainThread
   virtual void onPostExecute(Result const&) {}
 
-  // Show progress in the feedback system
-  // @MainThread
-  virtual void onProgressUpdate(Progress const&) {}
-
-  // Store the current state of the progress inside the class
-  // Use inside the doInBackground()
-  // @WorkerThread
-  virtual void publishProgress(Progress const& progress)
-  {
-    if (isCancelled())
-      return;
-
-    mProgress.store(progress);
-  }
-
   // Cleanup function if the task is canceled
   // @MainThread
   virtual void onCancelled() {}
@@ -218,6 +180,9 @@ protected:
   // Cleanup function if the task is canceled
   // @MainThread
   virtual void onCancelled(Result const&) { onCancelled(); }
+
+protected:
+  virtual void handleProgress() = 0;
 
 public:
   // Returns true if the task is canceled by the cancel()
@@ -259,7 +224,7 @@ public:
         return false;
 
       case std::future_status::timeout:
-        onProgressUpdate(mProgress.load());
+        handleProgress();
         return false;
 
       case std::future_status::ready:
@@ -286,4 +251,74 @@ private:
     if (isExceptionRethrowNeededOnMainThread.load() && eptr)
       std::rethrow_exception(eptr);
   }
+};
+
+
+template<typename Progress, typename Result, typename... Params>
+class AsyncTask : public AsyncTaskBase<Progress, Result, Params...>
+{
+private:
+  // Progress handling
+  template<typename Data>
+  struct ThreadSafeContainer
+  {
+  private:
+    Data mData{};
+    mutable std::mutex mMutex{};
+
+  public:
+    ThreadSafeContainer() = default;
+    ThreadSafeContainer(ThreadSafeContainer const&) = delete;
+    ThreadSafeContainer(ThreadSafeContainer&&) = delete;
+    ThreadSafeContainer& operator=(ThreadSafeContainer const&) = delete;
+    ThreadSafeContainer& operator=(ThreadSafeContainer&&) = delete;
+
+    void store(Data const& data)
+    {
+      std::unique_lock<std::mutex> lock(mMutex);
+      mData = data;
+    }
+
+    Data load() const
+    {
+      std::unique_lock<std::mutex> lock(mMutex);
+      return mData;
+    }
+  };
+
+  static bool constexpr isProgressAtomicCompatible = std::is_trivially_copyable_v<Progress>
+    && std::is_copy_constructible_v<Progress>
+    && std::is_move_constructible_v<Progress>
+    && std::is_copy_assignable_v<Progress>
+    && std::is_move_assignable_v<Progress>;
+    
+  using ProgressContainer = typename std::conditional<isProgressAtomicCompatible
+    , std::atomic<Progress>
+    , ThreadSafeContainer<Progress>
+  >::type;
+
+  ProgressContainer mProgress;
+
+protected:
+  // Store the current state of the progress inside the class
+  // Use inside the doInBackground()
+  // @WorkerThread
+  void storeProgress(Progress const& progress) override
+  {
+    this->mProgress.store(progress);
+  }
+
+  // Show progress in the feedback system
+  // @MainThread
+  virtual void onProgressUpdate(Progress const&) {}
+
+protected:
+  virtual void handleProgress() override final
+  {
+    this->onProgressUpdate(mProgress.load());
+  }
+
+
+public:
+  using AsyncTaskBase::AsyncTaskBase;
 };

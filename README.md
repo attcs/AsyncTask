@@ -9,7 +9,7 @@ The class interface is based on the similarly named Android java class, but avoi
 
 ## Usage
 * Asynchronous worker task should be defined by overriding `doInBackground()`
-* Check the interruption of the task with the `isCacelled()` in the `doInBackground()`
+* Check the interruption of the task with the `isCancelled()` in the `doInBackground()`
 * Current `Progress` can be stored by `publishProgress()` in `doInBackground()`
 * Feedback system elements should be handled by the `onPreExecute()`/`onProgressUpdate()`/`onPostExecute()`/`onCancelled()`
 * `execute()` starts the async `doInBackground()`
