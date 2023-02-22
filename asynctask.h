@@ -23,11 +23,17 @@ SOFTWARE.
 */
 
 #include <exception>
-#include <future>
 #include <atomic>
 #include <mutex>
 #include <type_traits>
 #include <queue>
+
+#ifdef _MSC_VER
+#pragma warning(suppress : 4355)
+#include <future>
+#else
+#include <future>
+#endif
 
 class AsyncTaskIllegalStateException
 {
