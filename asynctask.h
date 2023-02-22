@@ -189,11 +189,11 @@ public:
   // Returns true if the task is canceled by the cancel()
   // It is usable to break process inside the doInBackground()
   // @MainThread and @Workerthread
-  bool isCancelled() const noexcept { return atCancelled.load(); }
+  bool isCancelled() const noexcept { return atCancelled.load(std::memory_order_relaxed); }
 
   // Cancel the task
   // @MainThread
-  void cancel() noexcept { atCancelled.store(true); }
+  void cancel() noexcept { atCancelled.store(true, std::memory_order_relaxed); }
 
   // Get the result.
   // It could freeze the mainthread if it invoked before the task is finished. Exception from the doInBackground can be rethrown.
