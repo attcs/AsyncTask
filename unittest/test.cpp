@@ -27,7 +27,7 @@ namespace
     bool Has(Event const& e) { return std::find(_events.begin(), _events.end(), e) != _events.end(); }
   };
 
-  void Wait(std::chrono::milliseconds const& t = std::chrono::milliseconds(10))
+  static void Wait(std::chrono::milliseconds const& t = std::chrono::milliseconds(10))
   {
     std::this_thread::sleep_for(t);
   }

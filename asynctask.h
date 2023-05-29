@@ -1,4 +1,4 @@
-/*  
+/*
 MIT License
 
 Copyright (c) 2020 Attila Csikós (attcs)
@@ -27,6 +27,7 @@ SOFTWARE.
 #include <mutex>
 #include <type_traits>
 #include <queue>
+#include <optional>
 
 #ifdef _MSC_VER
 #pragma warning(suppress : 4355)
@@ -82,7 +83,7 @@ private:
 
 public:
   AsyncTaskBase() = default;
-  
+
 protected:
   AsyncTaskBase(AsyncTaskBase const&) = delete;
   AsyncTaskBase(AsyncTaskBase&&) = delete;
@@ -99,7 +100,7 @@ protected:
 
     if (!this->mFuture.valid())
       return;
-    
+
     this->mFuture.wait();
     // Exception rethrow: No. It could terminate the program if others already threw.
   };
@@ -125,9 +126,16 @@ public:
       [this](Params const&... params) -> Result
       { 
         if (isCancelled())
-          return {}; // Protect against undefined behavoiur, if Dtor is invoked before the - pure virtual function represented - task would be started
+          return {}; // Protect against undefined behavior, if Dtor is invoked before the - pure virtual function represented - task would be started
 
-        try { return this->postResult(this->doInBackground(params...)); }
+        try 
+        { 
+          auto result = this->doInBackground(params...);
+          if (isCancelled())
+            return {};
+
+          return this->postResult(std::move(result));
+        }
         catch (...)
         {
           cancel();
@@ -155,6 +163,7 @@ protected:
   // @WorkerThread
   virtual void storeProgress(Progress const&) {}
 
+public:
   // Store the current state of the progress inside the class
   // Use inside the doInBackground()
   // @WorkerThread
@@ -223,6 +232,12 @@ public:
     if (mStatus == Status::PENDING || !mFuture.valid())
       return false;
 
+    if (isCancelled())
+    {
+      finish(mFuture.get());
+      return true;
+    }
+
     auto const statusThread = mFuture.wait_for(std::chrono::seconds(0));
 
     switch (statusThread)
@@ -289,8 +304,12 @@ private:
 
     Data load() const
     {
-      std::unique_lock<std::mutex> lock(mMutex);
-      return mData;
+      Data data;
+      {
+        std::unique_lock<std::mutex> lock(mMutex);
+        data = mData;
+      }
+      return data;
     }
   };
 
@@ -351,14 +370,21 @@ private:
     ThreadSafeQueue& operator=(ThreadSafeQueue const&) = delete;
     ThreadSafeQueue& operator=(ThreadSafeQueue&&) = delete;
 
-    template<typename BinaryOp>
-    void store(Data const& data, BinaryOp fnLastShouldBeOverride)
+    template<typename BinaryAlteration>
+    void store(Data const& data, BinaryAlteration fnLastShouldBeAltered)
     {
       std::unique_lock<std::mutex> lock(mMutex);
-      if (mData.empty() || !fnLastShouldBeOverride(mData.back(), data))
-        mData.push(data);
-      else
-        mData.back() = data;
+      if (!mData.empty())
+      {
+        auto const oData = fnLastShouldBeAltered(mData.back(), data);
+        if (oData.has_value())
+        {
+          mData.back() = oData.value();
+          return;
+        }
+      }
+
+      mData.push(data);
     }
 
 
@@ -374,18 +400,18 @@ private:
 
 protected:
 
-  // To define condition when not all progress item wanted to be stored.
-  // @WorkerThread
-  virtual bool isLastProgressShouldBeOverride(Progress const& progressOld, Progress const& progressNew) const { return false; }
-  
+  // To define condition when not all progress item wanted to be stored. It will be used in thread-safe environment.
+  // @WorkerThread 
+  virtual std::optional<Progress> isLastShouldBeAltered(Progress const& progressOld, Progress const& progressNew) const { return std::nullopt; }
+
   // Store the current state of the progress inside the class
   // @WorkerThread
   void storeProgress(Progress const& progress) override
   {
     // or use overrideLast() in special cases.
-    this->mProgressQueue.store(progress, [this](Progress const& progressOld, Progress const& progressNew) 
-    { 
-      return this->isLastProgressShouldBeOverride(progressOld, progressNew);
+    this->mProgressQueue.store(progress, [this](Progress const& progressOld, Progress const& progressNew)
+    {
+      return this->isLastShouldBeAltered(progressOld, progressNew);
     });
   }
 

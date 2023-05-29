@@ -4,7 +4,7 @@ The class interface is based on the similarly named Android java class, but avoi
 [Original AsyncTask reference](https://developer.android.com/reference/android/os/AsyncTask)
 
 ## Requirements
-* Language standard: C++14 or above
+* Language standard: C++17 or above (`AsyncTask` is in C++14, `AsyncTaskPQ` is in C++17)
 * STL Headers: \<exception\>, \<future\>, \<atomic\>
 
 ## Usage
